@@ -3,7 +3,6 @@ import boto3
 import os
 import time
 import math
-import hashlib
 import json
 from urllib.parse import unquote_plus
 
@@ -13,7 +12,6 @@ lambda_client = boto3.client('lambda')
 ddb = boto3.client('dynamodb')
 table_parts = 'S3MPU'
 table_result = 'S3MPUResult'
-
 
 def lambda_handler(event, context):
     bucket = event['Records'][0]['s3']['bucket']['name']
@@ -47,12 +45,12 @@ def lambda_handler(event, context):
                     print('Copying global S3 object: ' + bucket + '/' + key)
                     s3client.download_file(bucket, key, file_name)
                     s3CNclient.upload_file(file_name, dst_bucket, dst_key)
-                    ddb.put_item(TableName=table_result,
-                                 Item={
-                                     'uploadid': {'S': 'Single'},
-                                     'destination_key': {'S': str(dst_key)},
-                                     'complete': {'S': 'Y'}
-                                 })
+                    ddb.put_item(TableName=table_result, 
+                            Item={
+                                'uploadid':{'S':'Single'},
+                                'destination_key':{'S':str(dst_key)},
+                                'complete':{'S':'Y'}
+                                })
 
                     print('Complete uploading to China S3 object: ' + dst_bucket + '/' + dst_key)
                     if os.path.exists(file_name):
@@ -60,20 +58,20 @@ def lambda_handler(event, context):
                 else:
                     # If file size > 5MB, get object parts by range. Upload all parts to temp s3 bucket.
                     part_bucket = 'pingaws-lambda'
-                    print('Split object to parts. Upload to temp bucket: ' + part_bucket)
+                    print('Split object to parts. Upload to temp bucket: '+part_bucket)
                     mpu_response = s3CNclient.create_multipart_upload(Bucket=dst_bucket, Key=key)
                     uploadid = mpu_response['UploadId']
                     part_size = 5 * 1024 * 1024
                     position = 0
-                    part_qty = math.ceil(file_length / (5 * 1024 * 1024))
+                    part_qty = math.ceil(file_length/(5 * 1024 * 1024))
                     i = 1
-
-                    while position < file_length:
-                        range_string = 'bytes=' + str(position) + '-' + str(position + part_size - 1)
+                    
+                    while position < file_length :
+                        range_string = 'bytes=' + str(position) + '-' + str(position+part_size-1)
                         response = s3client.get_object(Bucket=bucket, Key=key, Range=range_string)
                         body = response["Body"]
                         partfile_name = '/tmp/part' + str(i)
-                        part_key = uploadid + '/' + key + '_part' + str(i)
+                        part_key = uploadid+'/'+key+'_part'+str(i)
                         with open(partfile_name, 'wb') as file:
                             file.write(body.read())
                         s3client.upload_file(partfile_name, part_bucket, part_key)
@@ -82,31 +80,31 @@ def lambda_handler(event, context):
 
                         # Store s3 parts and result information in DDB.
                         ddb_time = time.time()
-                        ddb.put_item(TableName=table_parts,
-                                     Item={
-                                         'uploadid': {'S': str(uploadid)},
-                                         'part': {'N': str(i)},
-                                         'source_bucket': {'S': str(bucket)},
-                                         'source_key': {'S': str(key)},
-                                         'destination_bucket': {'S': str(dst_bucket)},
-                                         'etag': {'S': str(etag)},
-                                         'upload_time': {'S': str(ddb_time)},
-                                         'part_complete': {'S': 'N'}
-                                     })
-                        ddb.put_item(TableName=table_result,
-                                     Item={
-                                         'uploadid': {'S': str(uploadid)},
-                                         'destination_key': {'S': str(dst_key)},
-                                         'part_qty': {'N': str(part_qty)},
-                                         'part_count': {'N': '0'},
-                                         'complete': {'S': 'N'}
-                                     })
+                        ddb.put_item(TableName=table_parts, 
+                            Item={
+                                'uploadid':{'S':str(uploadid)},
+                                'part':{'N':str(i)},                                
+                                'source_bucket':{'S':str(bucket)},
+                                'source_key':{'S':str(key)},
+                                'destination_bucket':{'S':str(dst_bucket)},
+                                'etag':{'S':str(etag)},
+                                'upload_time':{'S':str(ddb_time)},
+                                'part_complete':{'S':'N'}
+                                })
+                        ddb.put_item(TableName=table_result, 
+                            Item={
+                                'uploadid':{'S':str(uploadid)},
+                                'destination_key':{'S':str(dst_key)},
+                                'part_qty':{'N':str(part_qty)},
+                                'part_count':{'N':'0'},
+                                'complete':{'S':'N'}
+                                })
                         if os.path.exists(partfile_name):
                             os.remove(partfile_name)
                         position += part_size
                         i += 1
 
-                    print("succeed")
+                    print("All parts are copied to temp bucket "+part_bucket+" successfully.")
 
         except Exception as e:
             print(traceback.format_exc())
