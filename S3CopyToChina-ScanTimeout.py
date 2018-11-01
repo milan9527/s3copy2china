@@ -34,6 +34,6 @@ def lambda_handler(event, context):
             Payload=payload_json
             )
         j += 1
-    print('Invoke Lambda to restart timeout tasks.')
+    print('Invoke '+str(j)+' Lambda to restart timeout tasks.')
 
     
