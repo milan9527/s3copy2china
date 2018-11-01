@@ -58,12 +58,12 @@ def lambda_handler(event, context):
                 else:
                     # If file size > 5MB, get object parts by range. Upload all parts to temp s3 bucket.
                     part_bucket = 'pingaws-lambda'
-                    print('Split object to parts. Upload to temp bucket: '+part_bucket)
+                    print('Split object '+bucket+'/'+key+' to parts. Upload to temp bucket: '+part_bucket)
                     mpu_response = s3CNclient.create_multipart_upload(Bucket=dst_bucket, Key=key)
                     uploadid = mpu_response['UploadId']
                     part_size = 5 * 1024 * 1024
                     position = 0
-                    part_qty = math.ceil(file_length/(5 * 1024 * 1024))
+                    part_qty = math.ceil(file_length/(part_size))
                     i = 1
                     
                     while position < file_length :
