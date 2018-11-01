@@ -1,6 +1,7 @@
 import traceback
 import boto3
 import os
+import time
 from urllib.parse import unquote_plus
 from boto3.dynamodb.conditions import Key, Attr
 
@@ -96,20 +97,38 @@ def lambda_handler(event, context):
             )
         items = response['Items']
         for i in items:
-             parts.append({"PartNumber": int(items[j]["part"]['N']), "ETag": items[j]["etag"]['S']})
-             j += 1
+            parts.append({"PartNumber": int(items[j]["part"]['N']), "ETag": items[j]["etag"]['S']})
+            j += 1
         s3CNclient.complete_multipart_upload(Bucket=dst_bucket, Key=dst_key, UploadId=key_uploadid, MultipartUpload={"Parts": parts})
+        
+        # Delete temp s3 part objects and ddb items.
+        k = 1
+        while k <= int(part_qty):
+            s3client.delete_object(
+                Bucket=bucket,
+                Key=key[:-1]+str(k)
+                )
+            ddb.delete_item(
+                TableName=table_parts,
+                Key={
+                    "uploadid": {"S": key_uploadid},
+                    "part": {"N": str(k)}
+                }
+                )
+            k += 1
+        
+        #Record task status.
         ddb.update_item(TableName=table_result,
         Key={
             "uploadid": {"S": key_uploadid}
             },
-        UpdateExpression="set complete = :complete",
+        UpdateExpression="set complete = :complete, complete_time = :ctime",
         ExpressionAttributeValues={
-            ":complete": {"S": "Y"}
+            ":complete": {"S": "Y"},
+            ":ctime": {"S": str(time.time())}
         },
         ReturnValues="UPDATED_NEW"
         )
-
-
+        
     print("Successfully copied S3 file "+dst_key+" to China bucket "+dst_bucket)
 
