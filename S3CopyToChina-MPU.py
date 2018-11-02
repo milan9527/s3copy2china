@@ -105,6 +105,19 @@ def lambda_handler(event, context):
             parts.append({"PartNumber": int(items[j]["part"]['N']), "ETag": items[j]["etag"]['S']})
             j += 1
         s3CNclient.complete_multipart_upload(Bucket=dst_bucket, Key=key, UploadId=uploadid, MultipartUpload={"Parts": parts})
+
+        #Record task status.
+        ddb.update_item(TableName=table_result,
+        Key={
+            "uploadid": {"S": uploadid}
+            },
+        UpdateExpression="set complete = :complete, complete_time = :ctime",
+        ExpressionAttributeValues={
+            ":complete": {"S": "Y"},
+            ":ctime": {"S": str(time.time())}
+        },
+        ReturnValues="UPDATED_NEW"
+        )
         
         # Delete temp ddb items.
         k = 1
@@ -118,18 +131,6 @@ def lambda_handler(event, context):
                 )
             k += 1
         
-        #Record task status.
-        ddb.update_item(TableName=table_result,
-        Key={
-            "uploadid": {"S": uploadid}
-            },
-        UpdateExpression="set complete = :complete, complete_time = :ctime",
-        ExpressionAttributeValues={
-            ":complete": {"S": "Y"},
-            ":ctime": {"S": str(time.time())}
-        },
-        ReturnValues="UPDATED_NEW"
-        )
         
         print("Successfully copied whole S3 file "+key+" to China bucket "+dst_bucket)
     
