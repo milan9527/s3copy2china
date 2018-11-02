@@ -9,3 +9,6 @@ If object size > 5MB, invoke other Lambda to call get object API by range with p
 Set Lambda timeout to 5 minutes.
 
 3 Lambda functions:
+S3CopyToChina-MPU.py: Many Lambda functions invoked by "S3CopyToChina-Main". Transfer S3 object parts in parallel.
+S3CopyToChina-Main.py: First Lambda invoked by S3 notification. 
+S3CopyToChina-Monitor.py: Monitor tasks status by checking Dynamodb.
