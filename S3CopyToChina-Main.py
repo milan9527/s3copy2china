@@ -22,10 +22,10 @@ def lambda_handler(event, context):
     # Read China credential
     response = s3client.get_object(Bucket=os.environ['CredBucket'], Key=os.environ['CredObject'])
     ak = response['Body']._raw_stream.readline().decode("UTF8").strip('\r\n')
-    secret = response['Body']._raw_stream.readline().decode("UTF8")
+    sk = response['Body']._raw_stream.readline().decode("UTF8")
     s3CNclient = boto3.client('s3', region_name='cn-north-1',
                               aws_access_key_id=ak,
-                              aws_secret_access_key=secret)
+                              aws_secret_access_key=sk)
 
     if not key.endswith('/'):
         try:
