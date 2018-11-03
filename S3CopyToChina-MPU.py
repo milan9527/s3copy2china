@@ -34,10 +34,10 @@ def lambda_handler(event, context):
     # Get China credential from global bucket. 
     response = s3client.get_object(Bucket=os.environ['CredBucket'], Key=os.environ['CredObject'])
     ak = response['Body']._raw_stream.readline().decode("UTF8").strip('\r\n')
-    secret = response['Body']._raw_stream.readline().decode("UTF8")
+    sk = response['Body']._raw_stream.readline().decode("UTF8")
     s3CNclient = boto3.client('s3', region_name='cn-north-1', 
                             aws_access_key_id=ak,
-                            aws_secret_access_key=secret)
+                            aws_secret_access_key=sk)
     
     # Download s3 part by range. Upload part to China S3 bucket.
     response = s3client.get_object(Bucket=bucket, Key=key, Range=range)
@@ -81,8 +81,10 @@ def lambda_handler(event, context):
             "uploadid": {"S": uploadid}
             },
         UpdateExpression="set part_count = :count",
+        ConditionExpression="complete = :c",
         ExpressionAttributeValues={
-            ":count": {"N": str(part_count)}
+            ":count": {"N": str(part_count)},
+            ":c": {"S": "N"}
         },
         ReturnValues="ALL_NEW"
         )
