@@ -20,13 +20,13 @@ def lambda_handler(event, context):
 
     # Monitor S3 multi part upload task.
     table = ddb.Table('S3MPU')
-    response = table.scan(
+    mpu_response = table.scan(
         FilterExpression=Attr('part_complete').eq('N')
         )
     j = 0
     k = 0
-    for i in response['Items']:
-        info = response['Items'][j]
+    for i in mpu_response['Items']:
+        info = mpu_response['Items'][j]
         uploadid = info['uploadid']
         bucket = info['source_bucket']
         key = info['source_key']
@@ -64,12 +64,12 @@ def lambda_handler(event, context):
         
     # Monitor S3 single object task.
     table = ddb.Table('S3Single')
-    response = table.scan(
+    single_response = table.scan(
         FilterExpression=Attr('complete').eq('N')
         )
     j = 0
-    for i in response['Items']:
-        info = response['Items'][j]
+    for i in single_response['Items']:
+        info = single_response['Items'][j]
         bucket = info['source_bucket']
         key = info['key']
         event_str = {
@@ -94,3 +94,6 @@ def lambda_handler(event, context):
             )
         j += 1
     print('Invoke '+str(j)+' Lambda to restart timeout tasks for single object.')
+
+
+    
