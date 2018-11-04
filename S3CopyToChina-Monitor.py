@@ -64,23 +64,23 @@ def lambda_handler(event, context):
         
     # Monitor S3 single object task.
     table = ddb.Table('S3Single')
-    single_response = table.scan(
+    s_response = table.scan(
         FilterExpression=Attr('complete').eq('N')
         )
     j = 0
-    for i in single_response['Items']:
-        info = single_response['Items'][j]
-        bucket = info['source_bucket']
-        key = info['key']
+    for m in s_response['Items']:
+        s_info = s_response['Items'][j]
+        s_bucket = info['source_bucket']
+        s_key = info['key']
         event_str = {
                     	'Records': [{
                     	    "eventName": "ObjectCreated:Put",
                     		's3': {
                     			'bucket': {
-                    				'name': bucket
+                    				'name': s_bucket
                     			},
                     			'object': {
-                    				'key': key
+                    				'key': s_key
                     			}
                     		}
                     	}]
