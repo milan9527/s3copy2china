@@ -18,9 +18,11 @@ def lambda_handler(event, context):
     key = unquote_plus(event['Records'][0]['s3']['object']['key'])
     eventType = event['Records'][0]['eventName']
     dst_bucket = os.environ['DstBucket']
+    credbucket = os.environ['CredBucket']
+    credobject = os.environ['CredObject']
 
     # Read China credential
-    response = s3client.get_object(Bucket=os.environ['CredBucket'], Key=os.environ['CredObject'])
+    response = s3client.get_object(Bucket=credbucket, Key=credobject)
     ak = response['Body']._raw_stream.readline().decode("UTF8").strip('\r\n')
     sk = response['Body']._raw_stream.readline().decode("UTF8")
     s3CNclient = boto3.client('s3', region_name='cn-north-1',
@@ -29,9 +31,6 @@ def lambda_handler(event, context):
 
     if not key.endswith('/'):
         try:
-            split_key = key.split('/')
-            file_name = '/tmp/' + split_key[-1]
-
             if 'ObjectRemoved' in eventType:
                 print('Deleting global S3 object: ' + bucket + '/' + key)
                 s3CNclient.delete_object(Bucket=dst_bucket, Key=key)
@@ -43,9 +42,8 @@ def lambda_handler(event, context):
                 if file_length <= 5 * 1024 * 1024:
                     # If file size <= 5MB, download object to Lambda temp directory. Then upload to China bucket.
                     print('Copying global S3 object: ' + bucket + '/' + key)
-
                     hash_id = hashlib.md5(str([time.time(),bucket,key]).encode('utf-8')).hexdigest()
-                    ddb.put_item(TableName='S3Single', 
+                    ddb.put_item(TableName='S3SingleResult', 
                             Item={
                                 'id':{'S': hash_id},
                                 'source_bucket':{'S': bucket},
@@ -54,27 +52,21 @@ def lambda_handler(event, context):
                                 'complete':{'S':'N'}
                                 })
 
-                    s3client.download_file(bucket, key, file_name)
-                    s3CNclient.upload_file(file_name, dst_bucket, key)
-                    
-                    ddb.put_item(TableName='S3SingleResult', 
-                            Item={
-                                'id':{'S': hash_id},
-                                'source_bucket':{'S': bucket},
-                                'destination_bucket':{'S': dst_bucket},
-                                'key':{'S': key},
-                                'complete_time':{'S': str(time.time())},
-                                'complete':{'S':'Y'}
-                                })
-                    ddb.delete_item(TableName='S3Single', 
-                            Key={
-                                "id": {"S": hash_id},
-                            }
-                            )
-
-                    if os.path.exists(file_name):
-                        os.remove(file_name)
-                    print('Complete uploading to China S3 object: ' + dst_bucket + '/' + key)
+                    event_str1 = {
+                        'bucket' : bucket,
+                        'key' : key,
+                        'dst_bucket' : dst_bucket,
+                        'id' : hash_id,
+                        'credbucket' : credbucket,
+                        'credobject' : credobject
+                    }
+                    payload_json = json.dumps(event_str1)
+                    lambdaclient.invoke(
+                        FunctionName='S3CopyToChina-Single',
+                        InvocationType='Event',
+                        Payload=payload_json
+                        )
+                    print('Invoke Lambda function to process single object.')
                     
                 else:
                     # If file size > 5MB, invoke other Lambda to transfer S3 parts by range in parallel.
@@ -105,10 +97,11 @@ def lambda_handler(event, context):
                             'dst_bucket' : dst_bucket,
                             'uploadid' : uploadid,
                             'part' : str(i),
-                            'range' : range_string
+                            'range' : range_string,
+                            'credbucket' : credbucket,
+                            'credobject' : credobject
                         }
                         payload_json = json.dumps(event_str)
-                        lambdaclient = boto3.client('lambda')
                         lambdaclient.invoke(
                             FunctionName='S3CopyToChina-MPU',
                             InvocationType='Event',
@@ -117,7 +110,7 @@ def lambda_handler(event, context):
                         position += part_size
                         i += 1
                     
-                    print('Invoke ' +str(part_qty)+ ' Lambda functions.')
+                    print('Invoke ' +str(part_qty)+ ' Lambda functions to process MPU object.')
 
         except Exception as e:
             print(traceback.format_exc())
