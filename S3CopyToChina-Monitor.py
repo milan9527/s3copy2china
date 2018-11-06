@@ -1,5 +1,7 @@
 import boto3
 import json
+import time
+from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 
 def lambda_handler(event, context):
@@ -19,9 +21,10 @@ def lambda_handler(event, context):
         j += 1
 
     # Monitor S3 multi part upload task.
+    now_time = time.time()
     table = ddb.Table('S3MPU')
     mpu_response = table.scan(
-        FilterExpression=Attr('part_complete').eq('N')
+        FilterExpression=Attr('part_complete').eq('N') & Attr('start_time').lt(Decimal(now_time)-300)
         )
     j = 0
     k = 0
@@ -59,36 +62,33 @@ def lambda_handler(event, context):
                     }
                 )
         j += 1
-        
     print('Invoke '+str(k)+' Lambda to restart timeout tasks for multi-parts object.')
         
     # Monitor S3 single object task.
+    now_time = time.time()
     table = ddb.Table('S3Single')
     s_response = table.scan(
-        FilterExpression=Attr('complete').eq('N')
+        FilterExpression=Attr('complete').eq('N') & Attr('start_time').lt(Decimal(now_time)-300)
         )
+    
     j = 0
     for m in s_response['Items']:
         s_info = s_response['Items'][j]
-        s_bucket = info['source_bucket']
-        s_key = info['key']
+        s_bucket = s_info['source_bucket']
+        s_key = s_info['key']
+        dst_bucket = s_info['destination_bucket']
+        id = s_info['id']
+
         event_str = {
-                    	'Records': [{
-                    	    "eventName": "ObjectCreated:Put",
-                    		's3': {
-                    			'bucket': {
-                    				'name': s_bucket
-                    			},
-                    			'object': {
-                    				'key': s_key
-                    			}
-                    		}
-                    	}]
-                    }
+                        'bucket' : s_bucket,
+                        'key' : s_key,
+                        'dst_bucket' : dst_bucket,
+                        'id' : id
+                   }
         payload_json = json.dumps(event_str)
         lambdaclient = boto3.client('lambda')
         lambdaclient.invoke(
-            FunctionName='S3CopyToChina-Main',
+            FunctionName='S3CopyToChina-Single',
             InvocationType='Event',
             Payload=payload_json
             )
