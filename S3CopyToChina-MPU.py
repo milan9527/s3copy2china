@@ -8,6 +8,8 @@ s3client = boto3.client('s3')
 ddb = boto3.client('dynamodb')
 table_parts = 'S3MPU'
 table_result = 'S3MPUResult'
+credbucket = os.environ['CredBucket']
+credobject = os.environ['CredObject']
 
 def lambda_handler(event, context):
     bucket = event['bucket']
@@ -19,7 +21,7 @@ def lambda_handler(event, context):
     tmp_file = '/tmp/'+ key
 
     # Store s3 parts information in DDB.
-    ddb_time = time.time()
+    start_time = time.time()
     ddb.put_item(TableName=table_parts, 
         Item={
             'uploadid':{'S':str(uploadid)},
@@ -28,11 +30,12 @@ def lambda_handler(event, context):
             'source_bucket':{'S':str(bucket)},
             'source_key':{'S':str(key)},
             'destination_bucket':{'S':str(dst_bucket)},
+            'start_time':{'N':str(start_time)},
             'part_complete':{'S':'N'}
             })
             
     # Get China credential from global bucket. 
-    response = s3client.get_object(Bucket=os.environ['CredBucket'], Key=os.environ['CredObject'])
+    response = s3client.get_object(Bucket=credbucket, Key=credobject)
     ak = response['Body']._raw_stream.readline().decode("UTF8").strip('\r\n')
     sk = response['Body']._raw_stream.readline().decode("UTF8")
     s3CNclient = boto3.client('s3', region_name='cn-north-1', 
@@ -50,15 +53,16 @@ def lambda_handler(event, context):
     print('Complete upload part to China S3 bucket:'+dst_bucket+'/'+key+' part #:'+str(part)+' Upload id: '+uploadid)
     
     # update table 'parts'
+    finish_time = time.time()
     ddb.update_item(TableName=table_parts,
         Key={
             "uploadid": {"S": uploadid},
             "part": {"N": part}
             },
-        UpdateExpression="set part_complete = :complete, upload_time = :upload_time, etag = :etag",
+        UpdateExpression="set part_complete = :complete, finish_time = :finish_time, etag = :etag",
         ExpressionAttributeValues={
             ":complete": {"S": "Y"},
-            ":upload_time": {'S':str(ddb_time)},
+            ":finish_time": {'N':str(finish_time)},
             ":etag": {'S':str(etag)}
         },
         ReturnValues="UPDATED_NEW"
@@ -116,7 +120,7 @@ def lambda_handler(event, context):
         UpdateExpression="set complete = :complete, complete_time = :ctime",
         ExpressionAttributeValues={
             ":complete": {"S": "Y"},
-            ":ctime": {"S": str(time.time())}
+            ":ctime": {"N": str(time.time())}
         },
         ReturnValues="UPDATED_NEW"
         )
@@ -138,3 +142,4 @@ def lambda_handler(event, context):
     
     
     
+
