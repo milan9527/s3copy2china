@@ -13,3 +13,5 @@ S3CopyToChina-Main.py: First Lambda invoked by S3 notification.
 S3CopyToChina-MPU.py: Many Lambda functions invoked by "S3CopyToChina-Main". Transfer S3 object parts in parallel.
 S3CopyToChina-Single.py: One function invoked by "S3CopyToChina-Main". Transfer S3 single object.
 S3CopyToChina-Monitor.py: Monitor tasks status by checking Dynamodb.
+
+See https://aws.amazon.com/cn/blogs/china/lambda-overseas-china-s3-file/
