@@ -2,6 +2,7 @@ import boto3
 import os
 import time
 import json
+import uuid
 from urllib.parse import unquote_plus
 
 s3client = boto3.client('s3')
@@ -14,7 +15,9 @@ def lambda_handler(event, context):
     key = unquote_plus(event['key'])
     id = event['id']
     dst_bucket = event['dst_bucket']  
-    file_name = '/tmp/' + key
+    file_name = '/tmp/' + str(uuid.uuid3(uuid.NAMESPACE_DNS, key))
+
+    print('Start copying S3 file '+bucket+'/'+key+ ' to China S3 bucket '+dst_bucket)
     
     # Read China credential
     response = s3client.get_object(Bucket=credbucket, Key=credobject)
@@ -59,7 +62,7 @@ def lambda_handler(event, context):
     if os.path.exists(file_name):
         os.remove(file_name)
         
-    print('Copy S3 file '+bucket+'/'+key+ 'to China S3 bucket '+dst_bucket)
+    print('Complete copying S3 file '+bucket+'/'+key+ ' to China S3 bucket '+dst_bucket)
 
 
 
