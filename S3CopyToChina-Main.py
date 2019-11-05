@@ -71,7 +71,7 @@ def lambda_handler(event, context):
                 else:
                     # If file size > 5MB, invoke other Lambda to transfer S3 parts by range in parallel.
                     print('Split object '+bucket+'/'+key+' to parts to process by Lambda.')
-                    mpu_response = s3CNclient.create_multipart_upload(Bucket=dst_bucket, Key=key)
+                    mpu_response = s3CNclient.create_multipart_upload(Bucket=dst_bucket, Key=key, ContentType=head_response['ContentType'])
                     uploadid = mpu_response['UploadId']
                     part_size = 5 * 1024 * 1024
                     position = 0
@@ -116,3 +116,4 @@ def lambda_handler(event, context):
             print(traceback.format_exc())
 
     return (bucket, key)
+    
