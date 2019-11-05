@@ -36,10 +36,15 @@ def lambda_handler(event, context):
                 'complete':{'S': 'N'},
                 'start_time':{'N': str(time.time())}
                 })
-
-    s3client.download_file(bucket, key, file_name)
-    s3CNclient.upload_file(file_name, dst_bucket, key)
-
+    
+    response = s3client.get_object(Bucket=bucket,Key=key)
+    f = open(file_name,'wb')
+    f.write(response['Body'].read())
+    f.close()
+    
+    ExtraArgs={"ContentType": response['ContentType']}
+    s3CNclient.upload_file(file_name, dst_bucket, key, ExtraArgs=ExtraArgs)
+    
     ddb.update_item(TableName='S3SingleResult',
         Key={
             "id": {"S": id}
@@ -63,7 +68,3 @@ def lambda_handler(event, context):
         os.remove(file_name)
         
     print('Complete copying S3 file '+bucket+'/'+key+ ' to China S3 bucket '+dst_bucket)
-
-
-
-
